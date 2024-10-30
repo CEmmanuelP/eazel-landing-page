@@ -1,15 +1,15 @@
-import { Cloud, Clouds, OrbitControls } from '@react-three/drei';
-import { Canvas } from '@react-three/fiber';
+import { Cloud, Clouds, PointerLockControls } from '@react-three/drei';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useControls } from 'leva';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from "three";
 
 // 랜덤 위치를 생성하는 함수
 const generateRandomPosition = () => {
   return [
-    (Math.random() - 0.5) * 20,  // x: -10 ~ 10
-    (Math.random() - 0.5) * 20,  // y: -10 ~ 10
-    (Math.random() - 0.5) * 20   // z: -10 ~ 10
+    (Math.random() - 0.5) * 10,
+    (Math.random() - 0.5) * 10,
+    (Math.random() - 0.5) * 10
   ]
 }
 
@@ -39,12 +39,74 @@ const RandomCubes = ({ count = 20 }) => {
   )
 }
 
+// 1인칭 카메라 컨트롤러
+const FirstPersonController = () => {
+  const { camera } = useThree()
+  const [keysPressed, setKeysPressed] = useState({})
+  const moveSpeed = 0.15
+  const controlsRef = useRef()
+
+  // 모든 벡터를 미리 생성하고 재사용
+  const vectors = useMemo(() => ({
+    moveDirection: new THREE.Vector3(),
+    forward: new THREE.Vector3(),
+    right: new THREE.Vector3(),
+    up: new THREE.Vector3(0, 1, 0)
+  }), [])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      setKeysPressed(prev => ({ ...prev, [e.key.toLowerCase()]: true }))
+    }
+
+    const handleKeyUp = (e) => {
+      setKeysPressed(prev => ({ ...prev, [e.key.toLowerCase()]: false }))
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [])
+
+  useFrame(() => {
+    // 이동 방향 초기화
+    vectors.moveDirection.set(0, 0, 0)
+
+    // 카메라가 바라보는 방향 계산
+    camera.getWorldDirection(vectors.forward)
+    vectors.forward.y = 0
+    vectors.forward.normalize()
+
+    // 측면 방향 계산
+    vectors.right.crossVectors(vectors.forward, vectors.up).normalize()
+
+    // WASD 키 입력에 따른 이동
+    if (keysPressed['w']) vectors.moveDirection.add(vectors.forward)
+    if (keysPressed['s']) vectors.moveDirection.sub(vectors.forward)
+    if (keysPressed['a']) vectors.moveDirection.sub(vectors.right)
+    if (keysPressed['d']) vectors.moveDirection.add(vectors.right)
+
+    // 이동 방향 정규화 및 적용
+    if (vectors.moveDirection.lengthSq() > 0) {
+      vectors.moveDirection.normalize()
+      camera.position.addScaledVector(vectors.moveDirection, moveSpeed)
+    }
+  })
+
+  return <PointerLockControls ref={controlsRef} />
+}
+
+
 //
 const CustomCloud = () => {
   const { color, x, y, z, range, ...config } = useControls({
     seed: { value: 1, min: 1, max: 100, step: 1 },
     segments: { value: 20, min: 1, max: 80, step: 1 },
-    volume: { value: 6, min: 0, max: 100, step: 0.1 },
+    volume: { value: 20, min: 0, max: 100, step: 0.1 },
     opacity: { value: 0.8, min: 0, max: 1, step: 0.01 },
     fade: { value: 10, min: 0, max: 400, step: 1 },
     growth: { value: 4, min: 0, max: 20, step: 1 },
@@ -72,15 +134,14 @@ export default function App() {
     >
       {/* Lights */}
       <color attach="background" args={['white']} />
-      <hemisphereLight intensity={1} groundColor="black" />
-      {/* Objects */}
+      <ambientLight intensity={1} color="white" />
+      {/* <hemisphereLight intensity={1} groundColor="white" /> */}
 
-
-      {/* 무작위 큐브들 */}
       <RandomCubes count={20} />
 
-      {/* OrbitControls 설정 */}
-      <OrbitControls
+      <FirstPersonController />
+
+      {/* <OrbitControls
         enableZoom={true}        // 줌 가능 여부
         enablePan={true}         // 패닝 가능 여부
         enableRotate={true}      // 회전 가능 여부
@@ -92,13 +153,13 @@ export default function App() {
         minPolarAngle={0}        // 최소 수직 회전 각도
         maxPolarAngle={Math.PI / 1.75} // 최대 수직 회전 각도
         target={[0, 0, 0]}       // 카메라가 바라보는 중심점
-      />
+      /> */}
 
       {/* Fog 설정
            첫 번째 인자: 안개 색상
            두 번째 인자: 안개가 시작되는 거리 (near)
            세 번째 인자: 안개가 완전히 차단되는 거리 (far) */}
-      {/* <fog attach="fog" args={['#202020', 1, 10]} /> */}
+      {/* <fog attach="fog" args={['#eeffff', 0.1, 3]} /> */}
 
       {/* Cloud */}
       <CustomCloud />
